@@ -395,7 +395,7 @@ async function main() {
     await selectDate(page, 'From', yesterday);
 
     // 7. Find the Power BI iframe and extract the metric cards.
-    console.log('\nWaiting up to 30 seconds for the Power BI report...');
+    console.log('\nWaiting for Power BI metrics: poll every 2 seconds for 30 seconds, then every 5 seconds until 2 minutes total...');
 
     const waitStartedAt = Date.now();
     let lastStatus = null;
@@ -516,7 +516,7 @@ async function main() {
     }
 
     if (!metrics) {
-      console.error('\nPower BI metrics were not available within 30 seconds.');
+      console.error('\nPower BI metrics were not available within 2 minutes.');
       console.error('The browser will remain open so you can inspect the report.');
       console.error('Last Power BI status and diagnostic text:');
       console.dir(lastStatus, { depth: null });
