@@ -16,6 +16,43 @@ const CURRENCY = 'INR';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+function formatTimestampWithTimezone(date, timeZone) {
+  // Format the extraction timestamp in the configured timezone with an explicit UTC offset.
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(date)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value])
+  );
+
+  // Compare the zoned wall-clock fields to the same instant rounded to seconds.
+  const instantAtSecond = Math.floor(date.getTime() / 1000) * 1000;
+  const zonedAsUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  );
+  const offsetMinutes = Math.round((zonedAsUtc - instantAtSecond) / 60000);
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const absoluteOffset = Math.abs(offsetMinutes);
+  const offsetHours = String(Math.floor(absoluteOffset / 60)).padStart(2, '0');
+  const offsetRemainder = String(absoluteOffset % 60).padStart(2, '0');
+
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${sign}${offsetHours}:${offsetRemainder}`;
+}
+
 async function pressEnter(message) {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -488,7 +525,7 @@ async function main() {
         report_name: 'ads_performance',
         from_date: toIsoDate(fromDate) || yesterday.iso,
         to_date: toIsoDate(toDate) || yesterday.iso,
-        extracted_at: extractionFinishedAt.toISOString(),
+        extracted_at: formatTimestampWithTimezone(extractionFinishedAt, TIMEZONE),
         extraction_duration_ms: extractionDurationMs,
         currency: CURRENCY,
         timezone: TIMEZONE,
@@ -504,7 +541,7 @@ async function main() {
     console.log('\n--- JSON OUTPUT ---\n');
     console.log(jsonOutput);
 
-    const timestampForFile = extractionFinishedAt.toISOString().replace(/[:.]/g, '-');
+    const timestampForFile = output.report_metadata.extracted_at.replace(/[:+]/g, '-');
     const outputFileName =
       `swiggy_ads_performance_${TARGET_RID}_${output.report_metadata.from_date}_${timestampForFile}.json`;
     const outputPath = path.resolve(process.cwd(), outputFileName);
