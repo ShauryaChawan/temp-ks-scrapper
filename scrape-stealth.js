@@ -455,9 +455,7 @@ async function main() {
               cardCount: cards.length,
               metrics: extracted,
               bodyTextLength: document.body?.innerText?.trim().length || 0,
-              bodyText: (document.body?.innerText || '').trim().slice(0, 1200),
-              pageTitle: document.title || null,
-              pageUrl: location.href,
+              bodyText: (document.body?.innerText || '').trim().slice(0, 160),
             };
           });
 
@@ -478,8 +476,6 @@ async function main() {
             readyState: result.readyState,
             bodyTextLength: result.bodyTextLength,
             bodyText: result.bodyText,
-            pageTitle: result.pageTitle,
-            pageUrl: result.pageUrl,
           };
 
           if (loaded) {
@@ -581,13 +577,9 @@ async function main() {
     fs.writeFileSync(outputPath, jsonOutput + '\n', 'utf8');
     console.log(`\nJSON saved to: ${outputPath}`);
 
-    console.log('\n--- FINAL DASHBOARD STATE ---');
-    console.dir(finalState, { depth: null });
-
-    console.log('\n--- FINAL POWER BI STATUS ---');
-    console.dir(lastStatus, { depth: null });
-
     console.log('\nFilter workflow complete.');
+    console.log(`Reporting period: ${output.report_metadata.from_date} to ${output.report_metadata.to_date}`);
+    console.log(`Extracted ${Object.keys(metrics).length} metrics in ${extractionDurationMs} ms.`);
     console.log('Chrome remains open. Press Ctrl+C to exit.');
     await new Promise(() => {});
   } catch (error) {
