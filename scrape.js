@@ -9,8 +9,10 @@ const PAGE_URL =
 const TARGET_RID = '26584';
 const REPORT_ID = '34874332-c1f5-4380-84dc-9d3517a87c79';
 const ACTION_DELAY_MS = 1000;
-const TOTAL_WAIT_MS = 30000;
-const POLL_INTERVAL_MS = 2000;
+const INITIAL_WAIT_MS = 30000;
+const EXTENDED_WAIT_MS = 120000;
+const INITIAL_POLL_INTERVAL_MS = 2000;
+const EXTENDED_POLL_INTERVAL_MS = 5000;
 const TIMEZONE = 'Asia/Kolkata';
 const CURRENCY = 'INR';
 
@@ -398,8 +400,23 @@ async function main() {
     const waitStartedAt = Date.now();
     let lastStatus = null;
     let metrics = null;
+    let extendedWaitEnabled = false;
+    let nextPollIntervalMs = INITIAL_POLL_INTERVAL_MS;
 
-    while (Date.now() - waitStartedAt < TOTAL_WAIT_MS) {
+    // Poll every 2 seconds for the first 30 seconds.
+    // If metrics are still unavailable, extend the overall timeout to 2 minutes
+    // and slow polling to every 5 seconds.
+    while (Date.now() - waitStartedAt < EXTENDED_WAIT_MS) {
+      const elapsedMs = Date.now() - waitStartedAt;
+
+      if (!extendedWaitEnabled && elapsedMs >= INITIAL_WAIT_MS) {
+        extendedWaitEnabled = true;
+        nextPollIntervalMs = EXTENDED_POLL_INTERVAL_MS;
+        console.log(
+          '\n30 seconds elapsed without all metrics. ' +
+          'Extending total wait to 2 minutes and polling every 5 seconds...'
+        );
+      }
       const frame = page.frames().find(candidate => {
         const frameUrl = candidate.url();
         return frameUrl.includes('app.powerbi.com/reportEmbed')
@@ -487,7 +504,15 @@ async function main() {
       const elapsedSeconds = Math.round((Date.now() - waitStartedAt) / 1000);
       console.log(`[${elapsedSeconds}s] Power BI check:`, JSON.stringify(lastStatus));
 
-      await sleep(POLL_INTERVAL_MS);
+      // Keep the initial 2-second cadence until 30 seconds; then use 5 seconds.
+      const currentElapsedMs = Date.now() - waitStartedAt;
+      const remainingToPhaseChangeMs = extendedWaitEnabled
+        ? nextPollIntervalMs
+        : Math.min(
+            nextPollIntervalMs,
+            Math.max(1, INITIAL_WAIT_MS - currentElapsedMs)
+          );
+      await sleep(remainingToPhaseChangeMs);
     }
 
     if (!metrics) {
