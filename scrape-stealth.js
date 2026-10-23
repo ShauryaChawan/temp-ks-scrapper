@@ -497,7 +497,7 @@ async function main() {
       }
 
       const elapsedSeconds = Math.round((Date.now() - waitStartedAt) / 1000);
-      console.log(`[${elapsedSeconds}s] Power BI check:`, JSON.stringify(lastStatus));
+      console.log(`[${elapsedSeconds}s] Power BI check:`, JSON.stringify({ attachedFrameFound: lastStatus?.attachedFrameFound ?? false, loaded: lastStatus?.loaded ?? false }));
 
       // Keep the initial 2-second cadence until 30 seconds; then use 5 seconds.
       const currentElapsedMs = Date.now() - waitStartedAt;
