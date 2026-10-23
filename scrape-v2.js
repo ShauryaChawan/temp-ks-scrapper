@@ -160,8 +160,8 @@ function parseMetricValue(metric, rawValue) {
   return { key: keys[metric], value };
 }
 
-async function ensureDashboardReady(page) {
-  await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+async function ensureDashboardReady(page, pageUrl) {
+  await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForFunction(() => {
     const expectedPath = /\/food\/business-metrics\/ads-performance\/restaurant\/\d+/.test(location.href);
     const filterPresent = [...document.querySelectorAll('button')]
@@ -361,7 +361,7 @@ async function runScrape({ res_id = CLI_RES_ID, outlets: requestedOutlets, outle
 
     const page = await browser.newPage();
     page.setDefaultTimeout(20000);
-    await ensureDashboardReady(page);
+    await ensureDashboardReady(page, PAGE_URL);
 
     for (const rid of OUTLET_RIDS) {
       console.log(`Starting outlet RID ${rid}`);
