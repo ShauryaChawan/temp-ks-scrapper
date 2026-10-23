@@ -439,6 +439,9 @@ async function main() {
               cardCount: cards.length,
               metrics: extracted,
               bodyTextLength: document.body?.innerText?.trim().length || 0,
+              bodyText: (document.body?.innerText || '').trim().slice(0, 1200),
+              pageTitle: document.title || null,
+              pageUrl: location.href,
             };
           });
 
@@ -458,6 +461,9 @@ async function main() {
             missingMetrics,
             readyState: result.readyState,
             bodyTextLength: result.bodyTextLength,
+            bodyText: result.bodyText,
+            pageTitle: result.pageTitle,
+            pageUrl: result.pageUrl,
           };
 
           if (loaded) {
@@ -485,10 +491,15 @@ async function main() {
     }
 
     if (!metrics) {
-      throw new Error(
-        'Could not extract all nine metrics within 30 seconds. Last status: '
-        + JSON.stringify(lastStatus)
-      );
+      console.error('\nPower BI metrics were not available within 30 seconds.');
+      console.error('The browser will remain open so you can inspect the report.');
+      console.error('Last Power BI status and diagnostic text:');
+      console.dir(lastStatus, { depth: null });
+      console.error('\nInspect the visible Chrome window. If the report later loads, rerun the scraper.');
+      console.error('The process will remain alive. Press Ctrl+C only when you want to stop it.');
+
+      // Keep Chrome and the Node process alive for manual inspection.
+      await new Promise(() => {});
     }
 
     // 8. Read the final selected date values and dashboard result summary.
@@ -559,9 +570,10 @@ async function main() {
     console.log('Chrome remains open. Press Ctrl+C to exit.');
     await new Promise(() => {});
   } catch (error) {
-    console.error('\nScraper failed:', error);
-    await browser.close();
-    process.exitCode = 1;
+    console.error('\nScraper error:', error);
+    console.error('Chrome will remain open for inspection. Press Ctrl+C when finished.');
+    // Keep the browser open after unexpected errors too, so the page can be inspected.
+    await new Promise(() => {});
   }
 }
 
