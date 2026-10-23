@@ -3,10 +3,18 @@ const readline = require('node:readline/promises');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const PAGE_URL =
-  'https://partner.swiggy.com/food/business-metrics/ads-performance/restaurant/10979';
+// IDs may be supplied by the calling system as command-line arguments:
+// node scrape.js --res-id=10979 --target-rid=26584 --outlet-id=YOUR_INTERNAL_OUTLET_ID
+function getArg(name, fallback) {
+  const prefix = `--${name}=`;
+  const arg = process.argv.slice(2).find(value => value.startsWith(prefix));
+  return arg ? arg.slice(prefix.length) : fallback;
+}
 
-const TARGET_RID = '26584';
+const SWIGGY_RES_ID = getArg('res-id', '10979');
+const TARGET_RID = getArg('target-rid', '26584');
+const INTERNAL_OUTLET_ID = getArg('outlet-id', null);
+const PAGE_URL = `https://partner.swiggy.com/food/business-metrics/ads-performance/restaurant/${SWIGGY_RES_ID}`;
 const REPORT_ID = '34874332-c1f5-4380-84dc-9d3517a87c79';
 const ACTION_DELAY_MS = 1000;
 const INITIAL_WAIT_MS = 30000;
@@ -14,7 +22,6 @@ const EXTENDED_WAIT_MS = 120000;
 const INITIAL_POLL_INTERVAL_MS = 2000;
 const EXTENDED_POLL_INTERVAL_MS = 5000;
 const TIMEZONE = 'Asia/Kolkata';
-const CURRENCY = 'INR';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -216,24 +223,12 @@ async function selectDate(page, placeholder, target) {
 }
 
 function parseMetricValue(metric, rawValue) {
-  const cleaned = String(rawValue).replace(/[₹,\s]/g, '');
+  const cleaned = String(rawValue).replace(/[₹,\\s]/g, '');
   const value = Number(cleaned);
 
   if (!Number.isFinite(value)) {
     throw new Error(`Could not parse metric "${metric}" value "${rawValue}"`);
   }
-
-  const units = {
-    'Ad Spends': CURRENCY,
-    'Impressions': 'count',
-    'Menu Visits': 'count',
-    'Orders': 'count',
-    'NU Orders': 'count',
-    'Sales': CURRENCY,
-    'AOV': 'INR_per_order',
-    'CPC': 'INR_per_click',
-    'ROAS': 'ratio',
-  };
 
   const keys = {
     'Ad Spends': 'ad_spends',
@@ -251,13 +246,7 @@ function parseMetricValue(metric, rawValue) {
     throw new Error(`Unexpected metric label: ${metric}`);
   }
 
-  return {
-    key: keys[metric],
-    data: {
-      value,
-      unit: units[metric],
-    },
-  };
+  return { key: keys[metric], value };
 }
 
 async function main() {
@@ -488,7 +477,7 @@ async function main() {
             metrics = {};
             for (const item of result.metrics) {
               const parsed = parseMetricValue(item.metric, item.value);
-              metrics[parsed.key] = parsed.data;
+              metrics[parsed.key] = parsed.value;
             }
             break;
           }
@@ -563,11 +552,8 @@ async function main() {
         to_date: toIsoDate(toDate) || yesterday.iso,
         extracted_at: formatTimestampWithTimezone(extractionFinishedAt, TIMEZONE),
         extraction_duration_ms: extractionDurationMs,
-        currency: CURRENCY,
-        timezone: TIMEZONE,
-      },
-      outlet: {
-        rid: TARGET_RID,
+        res_id: SWIGGY_RES_ID,
+        outlet_id: INTERNAL_OUTLET_ID,
       },
       metrics,
     };
