@@ -11,8 +11,8 @@ function getArg(name, fallback = null) {
   return arg ? arg.slice(prefix.length) : fallback;
 }
 
-const SWIGGY_RES_ID = getArg('res-id', '10979');
-const OUTLET_RIDS = (getArg('outlet-rids', '') || '')
+const CLI_RES_ID = getArg('res-id', process.env.SWIGGY_RES_ID || '10979');
+const CLI_OUTLET_RIDS = (getArg('outlet-rids', process.env.OUTLET_RIDS || '') || '')
   .split(',')
   .map(rid => rid.trim())
   .filter(Boolean);
@@ -92,7 +92,7 @@ async function selectDate(page, placeholder, target) {
       throw new Error(`Calendar not detected for "${placeholder}".`);
     }
 
-    const match = calendar.caption.match(/([A-Za-z]+)\\s+(\\d{4})/);
+    const match = calendar.caption.match(/([A-Za-z]+)\s+(\d{4})/);
     if (!match) throw new Error(`Cannot parse calendar caption: "${calendar.caption}"`);
 
     const monthNames = [
@@ -142,7 +142,7 @@ async function selectDate(page, placeholder, target) {
 }
 
 function parseMetricValue(metric, rawValue) {
-  const cleaned = String(rawValue).replace(/[₹,\\s]/g, '');
+  const cleaned = String(rawValue).replace(/[₹,\s]/g, '');
   const value = Number(cleaned);
   if (!Number.isFinite(value)) throw new Error(`Could not parse metric "${metric}" value "${rawValue}"`);
 
@@ -164,7 +164,7 @@ function parseMetricValue(metric, rawValue) {
 async function ensureDashboardReady(page) {
   await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForFunction(() => {
-    const expectedPath = /\\/food\\/business-metrics\\/ads-performance\\/restaurant\\/\\d+/.test(location.href);
+    const expectedPath = /\/food\/business-metrics\/ads-performance\/restaurant\/\d+/.test(location.href);
     const filterPresent = [...document.querySelectorAll('button')]
       .some(button => button.innerText.includes('Outlet name & RID'));
     return expectedPath && filterPresent;
@@ -315,8 +315,8 @@ async function getReportDates(page, fallbackDate) {
 
   const toIsoDate = value => {
     if (!value) return null;
-    if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value;
-    const match = value.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
     return match ? `${match[3]}-${match[2]}-${match[1]}` : null;
   };
 
@@ -326,8 +326,13 @@ async function getReportDates(page, fallbackDate) {
   };
 }
 
-async function main() {
-  if (!/^\\d+$/.test(String(SWIGGY_RES_ID))) {
+async function runScrape({ res_id = CLI_RES_ID, outlets: requestedOutlets, outlet_rids = CLI_OUTLET_RIDS } = {}) {
+  const SWIGGY_RES_ID = String(res_id);
+  const OUTLET_RIDS = (Array.isArray(requestedOutlets)
+    ? requestedOutlets.map(item => String(typeof item === 'object' ? item.outlet_rid ?? item.rid : item).trim())
+    : Array.isArray(outlet_rids) ? outlet_rids.map(String) : CLI_OUTLET_RIDS).filter(Boolean);
+  const PAGE_URL = `https://partner.swiggy.com/food/business-metrics/ads-performance/restaurant/${SWIGGY_RES_ID}`;
+  if (!/^\d+$/.test(String(SWIGGY_RES_ID))) {
     console.error('Invalid --res-id. Expected a numeric Swiggy restaurant ID.');
     process.exitCode = 2;
     return;
@@ -337,7 +342,7 @@ async function main() {
     process.exitCode = 2;
     return;
   }
-  if (OUTLET_RIDS.some(rid => !/^\\d+$/.test(rid))) {
+  if (OUTLET_RIDS.some(rid => !/^\d+$/.test(rid))) {
     console.error('Invalid outlet RID. All RIDs must be numeric strings.');
     process.exitCode = 2;
     return;
@@ -463,10 +468,50 @@ async function main() {
     console.error(`Could not save local JSON file: ${error.message}`);
   }
 
-  if (fatalError || failedOutlets > 0) process.exitCode = 1;
+  if (fatalError || failedOutlets > 0) {
+    const error = new Error(fatalError?.message || `${failedOutlets} outlet(s) failed to scrape.`);
+    error.result = output;
+    throw error;
+  }
+  return output;
 }
 
-main().catch(error => {
+async function main() {
+  try {
+    const result = await runScrape();
+    process.stdout.write(JSON.stringify(result, null, 2) + '\\n');
+  } catch (error) {
+    if (error.result) process.stdout.write(JSON.stringify(error.result, null, 2) + '\\n');
+    console.error('Scraper failed:', error?.message || error);
+    process.exitCode = 1;
+  }
+}
+
+exports.handler = async (event = {}) => {
+  try {
+    const result = await runScrape(event);
+    return {
+      statusCode: 200,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(result),
+    };
+  } catch (error) {
+    if (error.result) {
+      return {
+        statusCode: 207,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(error.result),
+      };
+    }
+    return {
+      statusCode: 500,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ error: error?.message || 'Scraper failed.' }),
+    };
+  }
+};
+
+if (require.main === module) main().catch(error => {
   console.error('Unhandled scraper error:', error?.stack || error);
   process.exitCode = 1;
 });
