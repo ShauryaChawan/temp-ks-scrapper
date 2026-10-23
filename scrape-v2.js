@@ -17,7 +17,6 @@ const CLI_OUTLET_RIDS = (getArg('outlet-rids', process.env.OUTLET_RIDS || '') ||
   .map(rid => rid.trim())
   .filter(Boolean);
 
-const PAGE_URL = `https://partner.swiggy.com/food/business-metrics/ads-performance/restaurant/${SWIGGY_RES_ID}`;
 const REPORT_ID = '34874332-c1f5-4380-84dc-9d3517a87c79';
 const ACTION_DELAY_MS = 1000;
 const INITIAL_WAIT_MS = 30000;
@@ -333,24 +332,16 @@ async function runScrape({ res_id = CLI_RES_ID, outlets: requestedOutlets, outle
     : Array.isArray(outlet_rids) ? outlet_rids.map(String) : CLI_OUTLET_RIDS).filter(Boolean);
   const PAGE_URL = `https://partner.swiggy.com/food/business-metrics/ads-performance/restaurant/${SWIGGY_RES_ID}`;
   if (!/^\d+$/.test(String(SWIGGY_RES_ID))) {
-    console.error('Invalid --res-id. Expected a numeric Swiggy restaurant ID.');
-    process.exitCode = 2;
-    return;
+    throw new Error('Invalid res_id. Expected a numeric Swiggy restaurant ID.');
   }
   if (!OUTLET_RIDS.length) {
-    console.error('Pass at least one RID using --outlet-rids=RID1,RID2,...');
-    process.exitCode = 2;
-    return;
+    throw new Error('Provide at least one outlet RID via --outlet-rids or the Lambda event outlets array.');
   }
   if (OUTLET_RIDS.some(rid => !/^\d+$/.test(rid))) {
-    console.error('Invalid outlet RID. All RIDs must be numeric strings.');
-    process.exitCode = 2;
-    return;
+    throw new Error('Invalid outlet RID. All RIDs must be numeric strings.');
   }
   if (new Set(OUTLET_RIDS).size !== OUTLET_RIDS.length) {
-    console.error('Duplicate outlet RIDs are not allowed.');
-    process.exitCode = 2;
-    return;
+    throw new Error('Duplicate outlet RIDs are not allowed.');
   }
 
   const extractionStartedAt = Date.now();
